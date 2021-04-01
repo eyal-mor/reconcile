@@ -1,17 +1,27 @@
-use serde_json::{Value};
+use serde_json::{Value as SerdeValue, json};
 use std::string::String;
+use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::Debug;
+
+pub fn debug_print<T1, T2> (v1: T1, v2: T2, p: &str) where T1: Debug, T2: Debug {
+    println!("--------------------------------------");
+    println!("Old Value Is: {:?}", v1);
+    println!("New Value Is: {:?}", v2);
+    println!("Path is: {:?}", p);
+    println!("--------------------------------------");
+}
 
 pub trait Worker {
-    fn create(&self) -> Result<Value, Box<dyn Error>>;
-    fn update(&self) -> Result<Value, Box<dyn Error>>;
-    fn delete(&self) -> Result<Value, Box<dyn Error>>;
+    fn create(&self) -> Result<SerdeValue, Box<dyn Error>>;
+    fn update(&self) -> Result<SerdeValue, Box<dyn Error>>;
+    fn delete(&self) -> Result<SerdeValue, Box<dyn Error>>;
 }
 
 pub struct Reconciler {
-    old: Value,
-    new: Value,
-    observers: Vec<Box<dyn Worker>>
+    old: SerdeValue,
+    new: SerdeValue,
+    observers: HashMap<String, Box<dyn Worker>>
 }
 
 impl Reconciler {
@@ -31,62 +41,94 @@ impl Reconciler {
                 return Err(e);
             }
         };
-        let observers = vec![];
 
+        let observers = HashMap::new();
         Ok(Reconciler{old, new, observers})
     }
 
-    pub fn reconcile(&self) {
-        let p = String::from("");
-        self.recurse(&self.old, &p);
+    pub fn add_observer(&mut self, key: String, observer: Box<dyn Worker>) {
+        self.observers.insert(key, observer);
     }
 
-    fn recurse(&self, elem: &Value, p: &String) {
+    pub fn reconcile(&self) {
+        self.recurse(&self.old, "");
+    }
+
+    fn recurse(&self, elem: &SerdeValue, p: &str) {
         match elem {
-            Value::Null => {
-                let v2_data = self.new.pointer(&p.to_owned()[..]).unwrap();
-                if v2_data.is_null() {
-                    println!("--------------------------------------");
-                    println!("v2_data is Null");
-                    println!("--------------------------------------");
+            SerdeValue::Null => {
+                let new_data = self.new.pointer(p).unwrap();
+                if !new_data.is_null() {
+                    return;
                 }
+
+                match self.observers.get(p) {
+                    Some(v) => {
+                        v.create();
+                    },
+                    None => {
+                        debug_print(false, new_data, p);
+                    },
+                };
             },
-            Value::Bool(d) => {
-                let v2_data = self.new.pointer(&p.to_owned()[..]).unwrap();
-                if d != v2_data {
-                    println!("--------------------------------------");
-                    println!("d == v2_d : {}", d == v2_data);
-                    println!("--------------------------------------");
+            SerdeValue::Bool(old_data) => {
+                let new_data = self.new.pointer(p).unwrap();
+
+                if old_data == new_data {
+                    return;
                 }
+
+                match self.observers.get(p) {
+                    Some(v) => {
+                        v.create();
+                    },
+                    None => {
+                        debug_print(old_data, new_data, p);
+                    }
+                };
             },
-            Value::Number(d) => {
-                let v2_data = self.new.pointer(&p.to_owned()[..]).unwrap();
-                if v2_data.is_number() && d.as_f64().unwrap() != v2_data.as_f64().unwrap() {
-                    println!("--------------------------------------");
-                    println!("d == v2_d : {}", d.as_f64().unwrap() == v2_data.as_f64().unwrap());
-                    println!("--------------------------------------");
+            SerdeValue::Number(old_data) => {
+                let new_data = self.new.pointer(p).unwrap();
+                if new_data.is_number() && old_data.as_f64().unwrap() == new_data.as_f64().unwrap() {
+                    return;
                 }
+
+                match self.observers.get(p) {
+                    Some(v) => {
+                        v.create();
+                    },
+                    None => {
+                        debug_print(old_data, new_data, p);
+                    }
+                };
             },
-            Value::String(d) => {
-                let v2_data = self.new.pointer(&p.to_owned()[..]).unwrap();
-                if v2_data.is_string() && d.as_str() != v2_data.as_str().unwrap() {
-                    println!("--------------------------------------");
-                    println!("{} == {} : {} for path: {}", d.as_str(), v2_data.as_str().unwrap(), d.as_str() == v2_data.as_str().unwrap(), p);
-                    println!("--------------------------------------");
+            SerdeValue::String(old_data) => {
+                let new_data = self.new.pointer(p).unwrap();
+                if new_data.is_string() && old_data.as_str() == new_data.as_str().unwrap() {
+                    return;
                 }
+
+                match self.observers.get(p) {
+                    Some(v) => {
+                        v.create();
+                    },
+                    None => {
+                        debug_print(old_data, new_data, p);
+                    }
+                };
             },
-            Value::Array(d) => {
-                println!("--------------------------------------");
-                for (pos, elem) in d.iter().enumerate() {
+            SerdeValue::Array(old_data) => {
+                // println!("--------------------------------------");
+                for (pos, elem) in old_data.iter().enumerate() {
                     let new_p = format!("{}/{}", p, pos);
                     self.recurse(elem, &new_p);
                 }
-                println!("--------------------------------------");
+                // println!("--------------------------------------");
             },
-            Value::Object(d) => {
-                println!("--------------------------------------");
-                for k in d.keys() {
-                    match d.get(k) {
+            SerdeValue::Object(old_data) => {
+                // println!("--------------------------------------");
+                for k in old_data.keys() {
+                    match old_data.get(k) {
                         Some(v) => {
                             let new_p = format!("{}/{}", p, k);
                             self.recurse(v, &new_p);
@@ -96,7 +138,6 @@ impl Reconciler {
                         }
                     }
                 }
-                println!("--------------------------------------");
             },
         }
     }
@@ -107,6 +148,20 @@ impl Reconciler {
 mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
+
+    pub struct WorkerMock {}
+
+    impl Worker for WorkerMock {
+        fn create(&self) -> Result<SerdeValue, Box<dyn Error>>{
+            return Ok(json!(1));
+        }
+        fn update(&self) -> Result<SerdeValue, Box<dyn Error>>{
+            return Ok(json!(1));
+        }
+        fn delete(&self) -> Result<SerdeValue, Box<dyn Error>>{
+            return Ok(json!(1));
+        }
+    }
 
     #[test]
     fn it_works() {
@@ -129,26 +184,28 @@ mod tests {
         "#;
 
         let new = r#"
-        {
-            "a": "a-what?",
-            "b": "b",
-            "c": ["1", "2", 3],
-            "d": 132,
-            "e": "e",
-            "obj": {
-                "a1": "a1",
-                "a2": "a2",
-                "a3": [1,2,3,4,0.5]
-            },
-            "f": null,
-            "g": null,
-            "arr": [{"arr1": "arr1", "arr2": "arr2", "arr3": {"arrObj1": "arrObj2"}}, {"abc123": "abc123"}, "arr4", 0.1, 0.2, 0.3]
-        }
-    "#;
+            {
+                "a": "a-what?",
+                "b": "b",
+                "c": ["1", "2", 3],
+                "d": 132,
+                "e": "e",
+                "obj": {
+                    "a1": "a1",
+                    "a2": "a2",
+                    "a3": [1,2,3,4,0.5]
+                },
+                "f": null,
+                "g": null,
+                "arr": [{"arr1": "arr1", "arr2": "arr2", "arr3": {"arrObj1": "arrObj2"}}, {"abc123": "abc123"}, "arr4", 0.1, 0.2, 0.3]
+            }
+        "#;
 
 
-        let reconciler = Reconciler::new(String::from(old), String::from(new)).unwrap();
+        let mut reconciler = Reconciler::new(String::from(old), String::from(new)).unwrap();
+        reconciler.add_observer(String::from("/arr/0/arr3/arrObj1"), Box::from(WorkerMock{}));
         println!("Old object is {:?}", reconciler.old);
+
         reconciler.reconcile();
     }
 }
