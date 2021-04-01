@@ -58,7 +58,8 @@ impl Reconciler {
         match elem {
             SerdeValue::Null => {
                 let new_data = self.new.pointer(p).unwrap();
-                if !new_data.is_null() {
+
+                if new_data.is_null() {
                     return;
                 }
 
@@ -118,15 +119,12 @@ impl Reconciler {
                 };
             },
             SerdeValue::Array(old_data) => {
-                // println!("--------------------------------------");
                 for (pos, elem) in old_data.iter().enumerate() {
                     let new_p = format!("{}/{}", p, pos);
                     self.recurse(elem, &new_p);
                 }
-                // println!("--------------------------------------");
             },
             SerdeValue::Object(old_data) => {
-                // println!("--------------------------------------");
                 for k in old_data.keys() {
                     match old_data.get(k) {
                         Some(v) => {
