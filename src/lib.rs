@@ -1,31 +1,38 @@
+// Ideas:
+//  1. Split path and search up the tree for a parent worker if no worker was found for child node.
+//  2. Register by "schema", which is derived by keys/values and their types.
+// mod observer;
+
 use serde_json::{Value as SerdeValue, json};
 use std::string::String;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
+use path_tree::PathTree;
+use std::fs;
 
 pub fn debug_print<T1, T2> (v1: T1, v2: T2, p: &str) where T1: Debug, T2: Debug {
-    println!("--------------------------------------");
     println!("Old Value Is: {:?}", v1);
     println!("New Value Is: {:?}", v2);
     println!("Path is: {:?}", p);
-    println!("--------------------------------------");
 }
 
-pub trait Worker {
-    fn create(&self) -> Result<SerdeValue, Box<dyn Error>>;
+pub trait Worker<'a> {
+    fn create(&self, old_data: &SerdeValue, new_data: &SerdeValue, path: &str) -> Result<SerdeValue, Box<dyn Error>>;
     fn update(&self) -> Result<SerdeValue, Box<dyn Error>>;
     fn delete(&self) -> Result<SerdeValue, Box<dyn Error>>;
+    fn error_create(&self) {}
+    fn error_update(&self) {}
+    fn error_delete(&self) {}
 }
 
-pub struct Reconciler {
+pub struct Reconciler <'a> {
     old: SerdeValue,
     new: SerdeValue,
-    observers: HashMap<String, Box<dyn Worker>>
+    observers: PathTree<Box<dyn Worker<'a>>>,
 }
 
-impl Reconciler {
-    pub fn new(old: String, new: String) -> Result<Reconciler, serde_json::Error> {
+impl <'a> Reconciler <'a> {
+    pub fn new(old: String, new: String) -> Result<Reconciler<'a>, serde_json::Error> {
         let old = match serde_json::from_str(&old.to_owned()) {
             Ok(v) => v,
             Err(e) => {
@@ -42,12 +49,12 @@ impl Reconciler {
             }
         };
 
-        let observers = HashMap::new();
-        Ok(Reconciler{old, new, observers})
+        let observers = PathTree::new();
+        Ok(Reconciler{old, new, observers,})
     }
 
-    pub fn add_observer(&mut self, key: String, observer: Box<dyn Worker>) {
-        self.observers.insert(key, observer);
+    pub fn add_observer(&mut self, path: &'a str, observer: Box<dyn Worker<'a>>) {
+        self.observers.insert(path, observer);
     }
 
     pub fn reconcile(&self) {
@@ -57,15 +64,33 @@ impl Reconciler {
     fn recurse(&self, elem: &SerdeValue, p: &str) {
         match elem {
             SerdeValue::Null => {
-                let new_data = self.new.pointer(p).unwrap();
+                // let new_data = self.new.pointer(p).unwrap();
+
+                let new_data = match self.new.pointer(p) {
+                    Some(d) => d,
+                    None => {
+                        match self.observers.find(p) {
+                            Some(v) => {
+                                let (worker, _) = v;
+                                worker.delete();
+                            },
+                            None => {
+                                debug_print(elem, "NONE", p);
+                            }
+                        };
+
+                        return json!("null");
+                    }
+                };
 
                 if new_data.is_null() {
                     return;
                 }
 
-                match self.observers.get(p) {
+                match self.observers.find(p) {
                     Some(v) => {
-                        v.create();
+                        let (worker, _) = v;
+                        worker.create(elem, new_data, p);
                     },
                     None => {
                         debug_print(false, new_data, p);
@@ -79,13 +104,14 @@ impl Reconciler {
                     return;
                 }
 
-                match self.observers.get(p) {
+                match self.observers.find(p) {
                     Some(v) => {
-                        v.create();
+                        let (worker, _) = v;
+                        worker.create(elem, new_data, p);
                     },
                     None => {
-                        debug_print(old_data, new_data, p);
-                    }
+                        debug_print(false, new_data, p);
+                    },
                 };
             },
             SerdeValue::Number(old_data) => {
@@ -94,13 +120,14 @@ impl Reconciler {
                     return;
                 }
 
-                match self.observers.get(p) {
+                match self.observers.find(p) {
                     Some(v) => {
-                        v.create();
+                        let (worker, _) = v;
+                        worker.create(elem, new_data, p);
                     },
                     None => {
-                        debug_print(old_data, new_data, p);
-                    }
+                        debug_print(false, new_data, p);
+                    },
                 };
             },
             SerdeValue::String(old_data) => {
@@ -109,13 +136,14 @@ impl Reconciler {
                     return;
                 }
 
-                match self.observers.get(p) {
+                match self.observers.find(p) {
                     Some(v) => {
-                        v.create();
+                        let (worker, _) = v;
+                        worker.create(elem, new_data, p);
                     },
                     None => {
-                        debug_print(old_data, new_data, p);
-                    }
+                        debug_print(false, new_data, p);
+                    },
                 };
             },
             SerdeValue::Array(old_data) => {
@@ -147,11 +175,14 @@ mod tests {
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
+    #[derive(Debug, Clone)]
     pub struct WorkerMock {}
 
-    impl Worker for WorkerMock {
-        fn create(&self) -> Result<SerdeValue, Box<dyn Error>>{
-            return Ok(json!(1));
+    impl <'a> Worker <'a> for WorkerMock {
+        fn create(&self, old_data: &SerdeValue, new_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+            println!("Called from WorkerMock::create");
+            debug_print(old_data, new_data, p);
+            Ok(json!(1))
         }
         fn update(&self) -> Result<SerdeValue, Box<dyn Error>>{
             return Ok(json!(1));
@@ -162,48 +193,26 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
-        let old = r#"
-            {
-                "a": "a",
-                "b": "b",
-                "c": ["1", "2", 3],
-                "d": 132,
-                "e": "e",
-                "obj": {
-                    "a1": "a1",
-                    "a2": "a2",
-                    "a3": [1,2,3,4,0.5]
-                },
-                "f": null,
-                "g": null,
-                "arr": [{"arr1": "arr1", "arr2": "arr2", "arr3": {"arrObj1": "arrObj1"}}, {"abc123": "abc123"}, "arr4", 0.1, 0.2, 0.3]
-            }
-        "#;
-
-        let new = r#"
-            {
-                "a": "a-what?",
-                "b": "b",
-                "c": ["1", "2", 3],
-                "d": 132,
-                "e": "e",
-                "obj": {
-                    "a1": "a1",
-                    "a2": "a2",
-                    "a3": [1,2,3,4,0.5]
-                },
-                "f": null,
-                "g": null,
-                "arr": [{"arr1": "arr1", "arr2": "arr2", "arr3": {"arrObj1": "arrObj2"}}, {"abc123": "abc123"}, "arr4", 0.1, 0.2, 0.3]
-            }
-        "#;
-
+    fn test_modify() {
+        let old = fs::read_to_string("./stubs/simple-json/old.json").expect("this should have worked?");
+        let new = fs::read_to_string("./stubs/simple-json/new.json").expect("this should have worked?");
 
         let mut reconciler = Reconciler::new(String::from(old), String::from(new)).unwrap();
-        reconciler.add_observer(String::from("/arr/0/arr3/arrObj1"), Box::from(WorkerMock{}));
-        println!("Old object is {:?}", reconciler.old);
+        let worker = Box::from(WorkerMock{});
+        reconciler.add_observer("/arr/*/arr3/arrObj1", worker.clone());
+        reconciler.add_observer("/a", worker.clone());
+        reconciler.reconcile();
+    }
 
+    #[test]
+    fn test_delete() {
+        let old = fs::read_to_string("./stubs/missing-new-values/old.json").expect("this should have worked?");
+        let new = fs::read_to_string("./stubs/missing-new-values/new.json").expect("this should have worked?");
+
+        let mut reconciler = Reconciler::new(String::from(old), String::from(new)).unwrap();
+        let worker = Box::from(WorkerMock{});
+        reconciler.add_observer("/arr/*/arr3/arrObj1", worker.clone());
+        reconciler.add_observer("/a", worker.clone());
         reconciler.reconcile();
     }
 }

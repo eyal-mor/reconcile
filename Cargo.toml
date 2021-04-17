@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Eyal Mor <eyalmor94@gmail.com>"]
 edition = "2018"
 
+[lib]
+name = "reconcile"
+crate_type = ["dylib"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -11,3 +15,4 @@ unstructured = "^0.5.0"
 serde = "^1.0.123"
 serde_json = "^1.0.61"
 serde_yaml = "^0.8.0"
+path-tree = "^0.1.12"
