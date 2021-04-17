@@ -6,9 +6,9 @@
 use serde_json::{Value as SerdeValue, json};
 use std::string::String;
 use std::error::Error;
+use std::fs;
 use std::fmt::Debug;
 use path_tree::PathTree;
-use std::fs;
 
 pub fn debug_print<T1, T2> (v1: T1, v2: T2, p: &str) where T1: Debug, T2: Debug {
     println!("Old Value Is: {:?}", v1);
@@ -19,7 +19,7 @@ pub fn debug_print<T1, T2> (v1: T1, v2: T2, p: &str) where T1: Debug, T2: Debug 
 pub trait Worker<'a> {
     fn create(&self, old_data: &SerdeValue, new_data: &SerdeValue, path: &str) -> Result<SerdeValue, Box<dyn Error>>;
     fn update(&self) -> Result<SerdeValue, Box<dyn Error>>;
-    fn delete(&self) -> Result<SerdeValue, Box<dyn Error>>;
+    fn delete(&self, old_data: &SerdeValue, path: &str) -> Result<SerdeValue, Box<dyn Error>>;
     fn error_create(&self) {}
     fn error_update(&self) {}
     fn error_delete(&self) {}
@@ -64,22 +64,20 @@ impl <'a> Reconciler <'a> {
     fn recurse(&self, elem: &SerdeValue, p: &str) {
         match elem {
             SerdeValue::Null => {
-                // let new_data = self.new.pointer(p).unwrap();
-
                 let new_data = match self.new.pointer(p) {
                     Some(d) => d,
                     None => {
                         match self.observers.find(p) {
                             Some(v) => {
                                 let (worker, _) = v;
-                                worker.delete();
+                                worker.delete(elem, p);
                             },
                             None => {
                                 debug_print(elem, "NONE", p);
                             }
                         };
 
-                        return json!("null");
+                        return;
                     }
                 };
 
@@ -187,8 +185,10 @@ mod tests {
         fn update(&self) -> Result<SerdeValue, Box<dyn Error>>{
             return Ok(json!(1));
         }
-        fn delete(&self) -> Result<SerdeValue, Box<dyn Error>>{
-            return Ok(json!(1));
+        fn delete(&self, old_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+            println!("Called from WorkerMock::delete");
+            debug_print(old_data, "", p);
+            Ok(json!(1))
         }
     }
 
