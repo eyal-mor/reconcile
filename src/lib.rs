@@ -25,18 +25,18 @@ pub fn debug_print<T1, T2> (v1: T1, v2: T2, p: &str) where T1: Debug, T2: Debug 
 }
 
 pub struct Reconciler <'a> {
-    old: &'a SerdeValue,
-    new: &'a SerdeValue,
+    from: &'a SerdeValue,
+    to: &'a SerdeValue,
     observers: PathTree<Box<dyn worker::Worker<'a>>>,
-    // Hashmap with: k = path (aka pointer into path), v = tuple(operation, old_data, new_data)
+    // Hashmap with: k = path (aka pointer into path), v = tuple(operation, old_data, comp_data)
     operations: HashMap<String, Operation>,
 }
 
 impl <'a> Reconciler <'a> {
-    pub fn new(old: &'a SerdeValue, new: &'a SerdeValue) -> Reconciler<'a> {
+    pub fn new(from: &'a SerdeValue, to: &'a SerdeValue) -> Reconciler<'a> {
         Reconciler{
-            old,
-            new,
+            from,
+            to,
             observers: PathTree::new(),
             operations: HashMap::new(),
         }
@@ -47,7 +47,8 @@ impl <'a> Reconciler <'a> {
     }
 
     pub fn reconcile(&mut self) {
-        self.recurse(&self.old, "");
+        self.recurse(&self.from, &self.to, "");
+        self.recurse(&self.to, &self.from, "");
     }
 
     pub fn add_operation(&mut self, path: &str, operation: Operation) {
@@ -57,23 +58,23 @@ impl <'a> Reconciler <'a> {
     // match self.observers.find(p) {
     //     Some(v) => {
     //         let (worker, _) = v;
-    //         worker.update(elem, new_data, p);
+    //         worker.update(elem, comp_data, p);
     //     },
     //     None => {
-    //         debug_print(false, new_data, p);
+    //         debug_print(false, comp_data, p);
     //     },
     // };
 
-    fn recurse(&mut self, elem: &'a SerdeValue, p: &str) {
+    fn recurse(&mut self, elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str) {
         match elem {
             SerdeValue::Null => {
-                let new_data = match self.new.pointer(p) {
+                let comp_data = match comp.pointer(p) {
                     Some(d) => d,
                     None => {
                         let operation = Operation{
                             op: OpType::Delete,
-                            new: None,
-                            old: Option::from(elem.clone()),
+                            to: None,
+                            from: Option::from(elem.clone()),
                         };
 
                         self.add_operation(p, operation);
@@ -81,26 +82,26 @@ impl <'a> Reconciler <'a> {
                     }
                 };
 
-                if new_data.is_null() {
+                if comp_data.is_null() {
                     return;
                 }
 
                 let operation = Operation{
                     op: OpType::Update,
-                    new: Option::from(elem.clone()),
-                    old: Option::from(new_data.to_owned()),
+                    to: Option::from(elem.clone()),
+                    from: Option::from(comp_data.to_owned()),
                 };
 
                 self.add_operation(p, operation);
             },
             SerdeValue::Bool(old_data) => {
-                let new_data = match self.new.pointer(p) {
+                let comp_data = match comp.pointer(p) {
                     Some(d) => d,
                     None => {
                         let operation = Operation{
                             op: OpType::Delete,
-                            new: None,
-                            old: Option::from(elem.clone()),
+                            to: None,
+                            from: Option::from(elem.clone()),
                         };
 
                         self.add_operation(p, operation);
@@ -108,26 +109,26 @@ impl <'a> Reconciler <'a> {
                     }
                 };
 
-                if old_data == new_data {
+                if old_data == comp_data {
                     return;
                 }
 
                 let operation = Operation {
                     op: OpType::Update,
-                    new: Option::from(new_data.to_owned()),
-                    old: Option::from(elem.to_owned()),
+                    to: Option::from(comp_data.to_owned()),
+                    from: Option::from(elem.to_owned()),
                 };
 
                 self.add_operation(p, operation);
             },
             SerdeValue::Number(old_data) => {
-                let new_data = match self.new.pointer(p) {
+                let comp_data = match comp.pointer(p) {
                     Some(d) => d,
                     None => {
                         let operation = Operation{
                             op: OpType::Delete,
-                            new: None,
-                            old: Option::from(elem.clone()),
+                            to: None,
+                            from: Option::from(elem.clone()),
                         };
 
                         self.add_operation(p, operation);
@@ -135,26 +136,26 @@ impl <'a> Reconciler <'a> {
                     }
                 };
 
-                if new_data.is_number() && old_data.as_f64().unwrap() == new_data.as_f64().unwrap() {
+                if comp_data.is_number() && old_data.as_f64().unwrap() == comp_data.as_f64().unwrap() {
                     return;
                 }
 
                 let operation = Operation {
                     op: OpType::Update,
-                    new: Option::from(new_data.to_owned()),
-                    old: Option::from(elem.to_owned()),
+                    to: Option::from(comp_data.to_owned()),
+                    from: Option::from(elem.to_owned()),
                 };
 
                 self.add_operation(p, operation);
             },
             SerdeValue::String(old_data) => {
-                let new_data = match self.new.pointer(p) {
+                let comp_data = match comp.pointer(p) {
                     Some(d) => d,
                     None => {
                         let operation = Operation{
                             op: OpType::Delete,
-                            new: None,
-                            old: Option::from(elem.clone()),
+                            to: None,
+                            from: Option::from(elem.clone()),
                         };
 
                         self.add_operation(p, operation);
@@ -162,14 +163,14 @@ impl <'a> Reconciler <'a> {
                     }
                 };
 
-                if new_data.is_string() && old_data.as_str() == new_data.as_str().unwrap() {
+                if comp_data.is_string() && old_data.as_str() == comp_data.as_str().unwrap() {
                     return;
                 }
 
                 let operation = Operation {
                     op: OpType::Update,
-                    new: Option::from(new_data.to_owned()),
-                    old: Option::from(elem.to_owned()),
+                    to: Option::from(comp_data.to_owned()),
+                    from: Option::from(elem.to_owned()),
                 };
 
                 self.add_operation(p, operation);
@@ -177,7 +178,7 @@ impl <'a> Reconciler <'a> {
             SerdeValue::Array(old_data) => {
                 for (pos, elem) in old_data.iter().enumerate() {
                     let new_p = Box::new(format!("{}/{}", p, pos));
-                    self.recurse(elem, &new_p);
+                    self.recurse(elem, comp, &new_p);
                 }
             },
             SerdeValue::Object(old_data) => {
@@ -185,7 +186,7 @@ impl <'a> Reconciler <'a> {
                     match old_data.get(k) {
                         Some(v) => {
                             let new_p = format!("{}/{}", p, k);
-                            self.recurse(v, &new_p);
+                            self.recurse(v, comp, &new_p);
                         },
                         None => {
                             println!("Skipped! {:?}", k);
@@ -207,14 +208,14 @@ mod tests {
     pub struct WorkerMock {}
 
     impl <'a> worker::Worker <'a> for WorkerMock {
-        fn create(&self, old_data: &SerdeValue, new_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+        fn create(&self, old_data: &SerdeValue, comp_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
             println!("Called from WorkerMock::create");
-            debug_print("", new_data, p);
+            debug_print("", comp_data, p);
             Ok(json!(1))
         }
-        fn update(&self, old_data: &SerdeValue, new_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+        fn update(&self, old_data: &SerdeValue, comp_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
             println!("Called from WorkerMock::update");
-            debug_print(old_data, new_data, p);
+            debug_print(old_data, comp_data, p);
             Ok(json!(1))
         }
         fn delete(&self, old_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
@@ -231,16 +232,16 @@ mod tests {
         let new_str = fs::read_to_string("./stubs/test-update/new.json").unwrap_or(String::from("{}"));
         let new_str = new_str.as_str();
 
-        let old: SerdeValue = serde_json::from_str(old_str).unwrap();
-        let new: SerdeValue = serde_json::from_str(new_str).unwrap();
+        let from: SerdeValue = serde_json::from_str(old_str).unwrap();
+        let to: SerdeValue = serde_json::from_str(new_str).unwrap();
 
-        let mut reconciler = Reconciler::new(&old, &new);
+        let mut reconciler = Reconciler::new(&from, &to);
         let worker = Box::from(WorkerMock{});
 
         reconciler.add_observer("/arr/*/arr3/arrObj1", worker.clone());
         reconciler.add_observer("/a", worker.clone());
         reconciler.reconcile();
-        println!("Test update: {:?}", reconciler.operations);
+        println!("Test update: {:#?}", reconciler.operations);
     }
 
     #[test]
@@ -250,15 +251,15 @@ mod tests {
         let new_str = fs::read_to_string("./stubs/test-delete/new.json").unwrap_or(String::from("{}"));
         let new_str = new_str.as_str();
 
-        let old: SerdeValue = serde_json::from_str(old_str).unwrap();
-        let new: SerdeValue = serde_json::from_str(new_str).unwrap();
+        let from: SerdeValue = serde_json::from_str(old_str).unwrap();
+        let to: SerdeValue = serde_json::from_str(new_str).unwrap();
 
-        let mut reconciler = Reconciler::new(&old, &new);
+        let mut reconciler = Reconciler::new(&from, &to);
         let worker = Box::from(WorkerMock{});
 
         reconciler.add_observer("/arr/*/arr3/arrObj1", worker.clone());
         reconciler.add_observer("/a", worker.clone());
         reconciler.reconcile();
-        println!("Test Delete: {:?}", reconciler.operations);
+        println!("Test Delete: {:#?}", reconciler.operations);
     }
 }

@@ -10,6 +10,6 @@ pub enum OpType {
 #[derive(Debug, Clone)]
 pub struct Operation {
     pub op: OpType,
-    pub new: Option<SerdeValue>,
-    pub old: Option<SerdeValue>,
+    pub to: Option<SerdeValue>,
+    pub from: Option<SerdeValue>,
 }
