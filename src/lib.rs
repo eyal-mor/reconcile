@@ -28,7 +28,6 @@ pub struct Reconciler <'a> {
     from: &'a SerdeValue,
     to: &'a SerdeValue,
     observers: PathTree<Box<dyn worker::Worker<'a>>>,
-    // Hashmap with: k = path (aka pointer into path), v = tuple(operation, old_data, comp_data)
     operations: HashMap<String, Operation>,
 }
 
@@ -94,7 +93,7 @@ impl <'a> Reconciler <'a> {
 
                 self.add_operation(p, operation);
             },
-            SerdeValue::Bool(old_data) => {
+            SerdeValue::Bool(from_data) => {
                 let comp_data = match comp.pointer(p) {
                     Some(d) => d,
                     None => {
@@ -109,7 +108,7 @@ impl <'a> Reconciler <'a> {
                     }
                 };
 
-                if old_data == comp_data {
+                if from_data == comp_data {
                     return;
                 }
 
@@ -121,7 +120,7 @@ impl <'a> Reconciler <'a> {
 
                 self.add_operation(p, operation);
             },
-            SerdeValue::Number(old_data) => {
+            SerdeValue::Number(from_data) => {
                 let comp_data = match comp.pointer(p) {
                     Some(d) => d,
                     None => {
@@ -136,7 +135,7 @@ impl <'a> Reconciler <'a> {
                     }
                 };
 
-                if comp_data.is_number() && old_data.as_f64().unwrap() == comp_data.as_f64().unwrap() {
+                if comp_data.is_number() && from_data.as_f64().unwrap() == comp_data.as_f64().unwrap() {
                     return;
                 }
 
@@ -148,7 +147,7 @@ impl <'a> Reconciler <'a> {
 
                 self.add_operation(p, operation);
             },
-            SerdeValue::String(old_data) => {
+            SerdeValue::String(from_data) => {
                 let comp_data = match comp.pointer(p) {
                     Some(d) => d,
                     None => {
@@ -163,7 +162,7 @@ impl <'a> Reconciler <'a> {
                     }
                 };
 
-                if comp_data.is_string() && old_data.as_str() == comp_data.as_str().unwrap() {
+                if comp_data.is_string() && from_data.as_str() == comp_data.as_str().unwrap() {
                     return;
                 }
 
@@ -175,15 +174,15 @@ impl <'a> Reconciler <'a> {
 
                 self.add_operation(p, operation);
             },
-            SerdeValue::Array(old_data) => {
-                for (pos, elem) in old_data.iter().enumerate() {
+            SerdeValue::Array(from_data) => {
+                for (pos, elem) in from_data.iter().enumerate() {
                     let new_p = Box::new(format!("{}/{}", p, pos));
                     self.recurse(elem, comp, &new_p);
                 }
             },
-            SerdeValue::Object(old_data) => {
-                for k in old_data.keys() {
-                    match old_data.get(k) {
+            SerdeValue::Object(from_data) => {
+                for k in from_data.keys() {
+                    match from_data.get(k) {
                         Some(v) => {
                             let new_p = format!("{}/{}", p, k);
                             self.recurse(v, comp, &new_p);
@@ -191,7 +190,7 @@ impl <'a> Reconciler <'a> {
                         None => {
                             println!("Skipped! {:?}", k);
                         }
-                    }
+                    };
                 }
             },
         }
@@ -208,19 +207,19 @@ mod tests {
     pub struct WorkerMock {}
 
     impl <'a> worker::Worker <'a> for WorkerMock {
-        fn create(&self, old_data: &SerdeValue, comp_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+        fn create(&self, from_data: &SerdeValue, comp_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
             println!("Called from WorkerMock::create");
             debug_print("", comp_data, p);
             Ok(json!(1))
         }
-        fn update(&self, old_data: &SerdeValue, comp_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+        fn update(&self, from_data: &SerdeValue, comp_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
             println!("Called from WorkerMock::update");
-            debug_print(old_data, comp_data, p);
+            debug_print(from_data, comp_data, p);
             Ok(json!(1))
         }
-        fn delete(&self, old_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+        fn delete(&self, from_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
             println!("Called from WorkerMock::delete");
-            debug_print(old_data, "", p);
+            debug_print(from_data, "", p);
             Ok(json!(1))
         }
     }
