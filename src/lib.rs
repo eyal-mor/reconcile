@@ -15,8 +15,10 @@ pub use std::error::Error;
 
 mod worker;
 mod operation;
+mod recurse;
 
 use operation::{Operation, OpType};
+use recurse::{recurse, Changes};
 
 pub fn debug_print<T1, T2> (v1: T1, v2: T2, p: &str) where T1: Debug, T2: Debug {
     println!("Old Value Is: {:?}", v1);
@@ -46,153 +48,32 @@ impl <'a> Reconciler <'a> {
     }
 
     pub fn reconcile(&mut self) {
-        self.recurse(&self.from, &self.to, "");
-        self.recurse(&self.to, &self.from, "");
-    }
+        let mut changes = Changes::new();
+        recurse(&self.from, &self.to, "", &mut changes);
+        recurse(&self.to, &self.from, "", &mut changes);
 
-    pub fn add_operation(&mut self, path: &str, operation: Operation) {
-        self.operations.insert(path.to_owned(), operation);
-    }
+        for (path, op) in changes.into_iter() {
+            let path = path.as_str();
+            match self.observers.find(path) {
+                Some(v) => {
+                    let (worker, _) = v;
 
-    // match self.observers.find(p) {
-    //     Some(v) => {
-    //         let (worker, _) = v;
-    //         worker.update(elem, comp_data, p);
-    //     },
-    //     None => {
-    //         debug_print(false, comp_data, p);
-    //     },
-    // };
-
-    fn recurse(&mut self, elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str) {
-        match elem {
-            SerdeValue::Null => {
-                let comp_data = match comp.pointer(p) {
-                    Some(d) => d,
-                    None => {
-                        let operation = Operation{
-                            op: OpType::Delete,
-                            to: None,
-                            from: Option::from(elem.clone()),
-                        };
-
-                        self.add_operation(p, operation);
-                        return;
-                    }
-                };
-
-                if comp_data.is_null() {
-                    return;
-                }
-
-                let operation = Operation{
-                    op: OpType::Update,
-                    to: Option::from(elem.clone()),
-                    from: Option::from(comp_data.to_owned()),
-                };
-
-                self.add_operation(p, operation);
-            },
-            SerdeValue::Bool(from_data) => {
-                let comp_data = match comp.pointer(p) {
-                    Some(d) => d,
-                    None => {
-                        let operation = Operation{
-                            op: OpType::Delete,
-                            to: None,
-                            from: Option::from(elem.clone()),
-                        };
-
-                        self.add_operation(p, operation);
-                        return;
-                    }
-                };
-
-                if from_data == comp_data {
-                    return;
-                }
-
-                let operation = Operation {
-                    op: OpType::Update,
-                    to: Option::from(comp_data.to_owned()),
-                    from: Option::from(elem.to_owned()),
-                };
-
-                self.add_operation(p, operation);
-            },
-            SerdeValue::Number(from_data) => {
-                let comp_data = match comp.pointer(p) {
-                    Some(d) => d,
-                    None => {
-                        let operation = Operation{
-                            op: OpType::Delete,
-                            to: None,
-                            from: Option::from(elem.clone()),
-                        };
-
-                        self.add_operation(p, operation);
-                        return;
-                    }
-                };
-
-                if comp_data.is_number() && from_data.as_f64().unwrap() == comp_data.as_f64().unwrap() {
-                    return;
-                }
-
-                let operation = Operation {
-                    op: OpType::Update,
-                    to: Option::from(comp_data.to_owned()),
-                    from: Option::from(elem.to_owned()),
-                };
-
-                self.add_operation(p, operation);
-            },
-            SerdeValue::String(from_data) => {
-                let comp_data = match comp.pointer(p) {
-                    Some(d) => d,
-                    None => {
-                        let operation = Operation{
-                            op: OpType::Delete,
-                            to: None,
-                            from: Option::from(elem.clone()),
-                        };
-
-                        self.add_operation(p, operation);
-                        return;
-                    }
-                };
-
-                if comp_data.is_string() && from_data.as_str() == comp_data.as_str().unwrap() {
-                    return;
-                }
-
-                let operation = Operation {
-                    op: OpType::Update,
-                    to: Option::from(comp_data.to_owned()),
-                    from: Option::from(elem.to_owned()),
-                };
-
-                self.add_operation(p, operation);
-            },
-            SerdeValue::Array(from_data) => {
-                for (pos, elem) in from_data.iter().enumerate() {
-                    let new_p = Box::new(format!("{}/{}", p, pos));
-                    self.recurse(elem, comp, &new_p);
-                }
-            },
-            SerdeValue::Object(from_data) => {
-                for k in from_data.keys() {
-                    match from_data.get(k) {
-                        Some(v) => {
-                            let new_p = format!("{}/{}", p, k);
-                            self.recurse(v, comp, &new_p);
+                    match op.op {
+                        OpType::Create => {
+                            worker.create(&op.to.unwrap(), path);
                         },
-                        None => {
-                            println!("Skipped! {:?}", k);
-                        }
-                    };
-                }
-            },
+                        OpType::Update => {
+                            worker.update(&op.from.unwrap(), &op.to.unwrap(), path);
+                        },
+                        OpType::Delete => {
+                            worker.delete(&op.from.unwrap(), path);
+                        },
+                    }
+                },
+                None => {
+                    println!("No Operation Found For {:#?}: {:#?}", path, op);
+                },
+            };
         }
     }
 }
@@ -207,14 +88,14 @@ mod tests {
     pub struct WorkerMock {}
 
     impl <'a> worker::Worker <'a> for WorkerMock {
-        fn create(&self, from_data: &SerdeValue, comp_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+        fn create(&self, new_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
             println!("Called from WorkerMock::create");
-            debug_print("", comp_data, p);
+            debug_print("", new_data, p);
             Ok(json!(1))
         }
-        fn update(&self, from_data: &SerdeValue, comp_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
+        fn update(&self, old_data: &SerdeValue, new_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
             println!("Called from WorkerMock::update");
-            debug_print(from_data, comp_data, p);
+            debug_print(old_data, new_data, p);
             Ok(json!(1))
         }
         fn delete(&self, from_data: &SerdeValue, p: &str) -> Result<SerdeValue, Box<dyn Error>>{
@@ -240,7 +121,7 @@ mod tests {
         reconciler.add_observer("/arr/*/arr3/arrObj1", worker.clone());
         reconciler.add_observer("/a", worker.clone());
         reconciler.reconcile();
-        println!("Test update: {:#?}", reconciler.operations);
+        // println!("Test update: {:#?}", changes);
     }
 
     #[test]
@@ -259,6 +140,6 @@ mod tests {
         reconciler.add_observer("/arr/*/arr3/arrObj1", worker.clone());
         reconciler.add_observer("/a", worker.clone());
         reconciler.reconcile();
-        println!("Test Delete: {:#?}", reconciler.operations);
+        // println!("Test Delete: {:#?}", changes);
     }
 }
