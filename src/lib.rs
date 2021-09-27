@@ -70,14 +70,16 @@ impl <'a> WorkerReconciler <'a> {
         self.observers.insert(path, observer);
     }
 
-    pub fn reconcile(&mut self) {
+    pub fn reconcile(&mut self) -> Changes {
         let mut changes = Changes::new();
         recurse(&self.from, &self.to, "", &mut changes, Direction::OldToNew);
         recurse(&self.to, &self.from, "", &mut changes, Direction::NewToOld);
-        self.call_observers_on_changes(changes);
+        self.call_observers_on_changes(&changes);
+
+        return changes;
     }
 
-    fn call_observers_on_changes(&mut self, changes: Changes) {
+    fn call_observers_on_changes(&mut self, changes: &Changes) {
         for (path, op) in changes.into_iter() {
             let path = path.as_str();
             match self.observers.find(path) {
@@ -86,13 +88,13 @@ impl <'a> WorkerReconciler <'a> {
 
                     match op.op {
                         OpType::Create => {
-                            worker.create(&op.to.unwrap(), path);
+                            worker.create(op.to.as_ref().unwrap(), path);
                         },
                         OpType::Update => {
-                            worker.update(&op.from.unwrap(), &op.to.unwrap(), path);
+                            worker.update(op.from.as_ref().unwrap(), op.to.as_ref().unwrap(), path);
                         },
                         OpType::Delete => {
-                            worker.delete(&op.from.unwrap(), path);
+                            worker.delete(op.from.as_ref().unwrap(), path);
                         },
                     }
                 },
@@ -142,9 +144,10 @@ mod tests {
         let to: SerdeValue = serde_json::from_str(new_str).unwrap();
 
         let mut reconciler = Reconciler::new(&from, &to);
-        let worker = Box::from(WorkerMock{});
+        // let worker = Box::from(WorkerMock{});
 
-        reconciler.reconcile();
+        let tree = reconciler.reconcile();
+        println!("tree is: {:?}", tree);
     }
 
     #[test]
@@ -158,9 +161,10 @@ mod tests {
         let to: SerdeValue = serde_json::from_str(new_str).unwrap();
 
         let mut reconciler = Reconciler::new(&from, &to);
-        let worker = Box::from(WorkerMock{});
+        // let worker = Box::from(WorkerMock{});
 
-        reconciler.reconcile();
+        let tree = reconciler.reconcile();
+        println!("tree is: {:?}", tree);
     }
 
     #[test]
@@ -174,8 +178,9 @@ mod tests {
         let to: SerdeValue = serde_json::from_str(new_str).unwrap();
 
         let mut reconciler = Reconciler::new(&from, &to);
-        let worker = Box::from(WorkerMock{});
+        // let worker = Box::from(WorkerMock{});
 
-        reconciler.reconcile();
+        let tree = reconciler.reconcile();
+        println!("tree is: {:?}", tree);
     }
 }
