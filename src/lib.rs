@@ -8,6 +8,8 @@ use std::string::String;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use path_tree::PathTree;
+use std::array::IntoIter;
+use std::iter::FromIterator;
 
 pub use serde_json::json;
 pub use std::fs;
@@ -147,7 +149,20 @@ mod tests {
         // let worker = Box::from(WorkerMock{});
 
         let tree = reconciler.reconcile();
-        println!("tree is: {:?}", tree);
+        let assertion = HashMap::from_iter(IntoIter::new([
+            ("/a".to_owned(), Operation{
+                op: OpType::Update,
+                to: Option::Some(serde_json::Value::String("a".to_owned())),
+                from: Option::Some(serde_json::Value::String("a-what?".to_owned())),
+            }),
+            ("/arr/0/arr3/arrObj1".to_owned(), Operation{
+                op: OpType::Update,
+                to: Option::Some(serde_json::Value::String("arrObj1".to_owned())),
+                from: Option::Some(serde_json::Value::String("arrObj2".to_owned())),
+            }),
+        ]));
+
+        assert_eq!(tree, assertion);
     }
 
     #[test]
