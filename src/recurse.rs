@@ -122,7 +122,8 @@ pub fn recurse<'a>(elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str, changes:
         },
         SerdeValue::Object(from_data) => {
             for k in from_data.keys() {
-                let new_p = format!("{}/{}", p, k);
+                let key_pointer = k.replace("~", "~0").replace("/", "~1");
+                let new_p = format!("{}/{}", p, key_pointer);
                 match from_data.get(k) {
                     Some(v) => {
                         recurse(v, comp, &new_p, changes);
@@ -139,6 +140,7 @@ pub fn recurse<'a>(elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str, changes:
             let new_keys: Vec<_> = to_data.keys().filter(|k| !from_data.contains_key(k.clone())).collect();
 
             new_keys.into_iter().for_each(|k| {
+                let key_pointer = k.replace("~", "~0").replace("/", "~1");
                 let new_p = format!("{}/{}", p, k);
 
                 let operation = Operation {
