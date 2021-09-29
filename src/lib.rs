@@ -148,16 +148,9 @@ mod tests {
 
         let tree = reconciler.reconcile();
         let assertion = HashMap::from_iter(IntoIter::new([
-            ("/a".to_owned(), Operation{
-                op: OpType::Update,
-                from: Option::Some(serde_json::Value::String("a".to_owned())),
-                to: Option::Some(serde_json::Value::String("a-what?".to_owned())),
-            }),
-            ("/arr/0/arr3/arrObj1".to_owned(), Operation{
-                op: OpType::Update,
-                from: Option::Some(serde_json::Value::String("arrObj1".to_owned())),
-                to: Option::Some(serde_json::Value::String("arrObj2".to_owned())),
-            }),
+            ("/a".to_owned(), Operation{ op: OpType::Update, from: Some(json!("a")), to: Some(json!("a-what?")) }),
+            ("/arr/0/arr3/arrObj1".to_owned(), Operation{ op: OpType::Update, from: Some(json!("arrObj1")), to: Some(json!("arrObj2")) }),
+            ("/arr/5".to_owned(), Operation{ op: OpType::Update, from: Some(json!(0.4)), to: Some(json!(0.3)) }),
         ]));
 
         assert_eq!(tree, assertion);
@@ -231,6 +224,7 @@ mod tests {
             ("/b".to_owned(), Operation { op: OpType::Create, from: None, to: Some(json!("b")) }),
             ("/abc123".to_owned(), Operation { op: OpType::Create, from: None, to: Some(json!("abc123")) }),
             ("/a".to_owned(), Operation { op: OpType::Update, from: Some(json!("a")), to: Some(json!("a-what?")) }),
+            ("/array".to_owned(), Operation {op: OpType::Create, from: None, to: Some(json!([1, 2, 3]))}),
         ]));
 
         assert_eq!(tree, assertion);

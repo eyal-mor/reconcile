@@ -137,10 +137,10 @@ pub fn recurse<'a>(elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str, changes:
     match (elem, comp_val) {
         (SerdeValue::Object(from_data), SerdeValue::Object(to_data)) => {
             let new_keys: Vec<_> = to_data.keys().filter(|k| !from_data.contains_key(k.clone())).collect();
-            println!("new keys {:?}", new_keys);
+
             new_keys.into_iter().for_each(|k| {
                 let new_p = format!("{}/{}", p, k);
-                println!("Key Path {:?}", new_p);
+
                 let operation = Operation {
                     op: OpType::Create,
                     to: Option::from(comp_val.get(k).unwrap().clone()),
