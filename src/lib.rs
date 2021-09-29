@@ -135,9 +135,9 @@ mod tests {
 
     #[test]
     fn test_modify() {
-        let old_str = fs::read_to_string("./stubs/test-update/old.json").unwrap_or(String::from("{}"));
+        let old_str = fs::read_to_string("./stubs/objects/update/old.json").unwrap_or(String::from("{}"));
         let old_str = old_str.as_str();
-        let new_str = fs::read_to_string("./stubs/test-update/new.json").unwrap_or(String::from("{}"));
+        let new_str = fs::read_to_string("./stubs/objects/update/new.json").unwrap_or(String::from("{}"));
         let new_str = new_str.as_str();
 
         let from: SerdeValue = serde_json::from_str(old_str).unwrap();
@@ -158,9 +158,9 @@ mod tests {
 
     #[test]
     fn test_delete() {
-        let old_str = fs::read_to_string("./stubs/test-delete/old.json").unwrap_or(String::from("{}"));
+        let old_str = fs::read_to_string("./stubs/objects/delete/old.json").unwrap_or(String::from("{}"));
         let old_str = old_str.as_str();
-        let new_str = fs::read_to_string("./stubs/test-delete/new.json").unwrap_or(String::from("{}"));
+        let new_str = fs::read_to_string("./stubs/objects/delete/new.json").unwrap_or(String::from("{}"));
         let new_str = new_str.as_str();
 
         let from: SerdeValue = serde_json::from_str(old_str).unwrap();
@@ -202,9 +202,9 @@ mod tests {
 
     #[test]
     fn test_create() {
-        let old_str = fs::read_to_string("./stubs/test-create/old.json").unwrap_or(String::from("{}"));
+        let old_str = fs::read_to_string("./stubs/objects/create/old.json").unwrap_or(String::from("{}"));
         let old_str = old_str.as_str();
-        let new_str = fs::read_to_string("./stubs/test-create/new.json").unwrap_or(String::from("{}"));
+        let new_str = fs::read_to_string("./stubs/objects/create/new.json").unwrap_or(String::from("{}"));
         let new_str = new_str.as_str();
 
         let from: SerdeValue = serde_json::from_str(old_str).unwrap();
