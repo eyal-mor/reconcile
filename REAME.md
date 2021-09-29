@@ -1,0 +1,1 @@
+[![Rust](https://github.com/eyalmor94/reconcile/actions/workflows/rust.yml/badge.svg)](https://github.com/eyalmor94/reconcile/actions/workflows/rust.yml)
