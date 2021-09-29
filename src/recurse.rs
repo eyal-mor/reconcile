@@ -129,15 +129,6 @@ pub fn recurse<'a>(elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str, changes:
                     },
                     None => { /* Skipped */ }
                 };
-
-                let to_data = comp.pointer(&new_p).unwrap_or(&SerdeValue::Null);
-                match to_data {
-                    SerdeValue::Object(v) => {
-                        let new_keys: Vec<_> = v.keys().filter(|k| !from_data.contains_key(k.clone())).collect();
-                        println!("New Keys: {:?}", new_keys);
-                    },
-                    _ => { /* Skipped */ }
-                }
             }
         },
     }
@@ -148,14 +139,15 @@ pub fn recurse<'a>(elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str, changes:
             let new_keys: Vec<_> = to_data.keys().filter(|k| !from_data.contains_key(k.clone())).collect();
             println!("new keys {:?}", new_keys);
             new_keys.into_iter().for_each(|k| {
-                let path = format!("/{}", k);
+                let new_p = format!("{}/{}", p, k);
+                println!("Key Path {:?}", new_p);
                 let operation = Operation {
                     op: OpType::Create,
-                    to: Option::from(comp.pointer(&path).unwrap().clone()),
+                    to: Option::from(comp_val.get(k).unwrap().clone()),
                     from: Option::None,
                 };
 
-                changes.insert(String::from(path), operation);
+                changes.insert(String::from(&new_p), operation);
             });
         },
         _ => { /* Skipped */ }
