@@ -20,7 +20,7 @@ mod operation;
 mod recurse;
 
 use operation::{Operation, OpType};
-use recurse::{recurse, Changes, Direction};
+use recurse::{recurse, Changes};
 
 pub fn debug_print<T1, T2> (v1: T1, v2: T2, p: &str) where T1: Debug, T2: Debug {
     println!("Old Value Is: {:?}", v1);
@@ -44,8 +44,7 @@ impl <'a> Reconciler <'a> {
 
     pub fn reconcile(&mut self) -> Changes {
         let mut changes = Changes::new();
-        recurse(&self.from, &self.to, "", &mut changes, Direction::OldToNew);
-        recurse(&self.to, &self.from, "", &mut changes, Direction::NewToOld);
+        recurse(&self.from, &self.to, "", &mut changes);
 
         return changes;
     }
@@ -74,8 +73,7 @@ impl <'a> WorkerReconciler <'a> {
 
     pub fn reconcile(&mut self) -> Changes {
         let mut changes = Changes::new();
-        recurse(&self.from, &self.to, "", &mut changes, Direction::OldToNew);
-        recurse(&self.to, &self.from, "", &mut changes, Direction::NewToOld);
+        recurse(&self.from, &self.to, "", &mut changes);
         self.call_observers_on_changes(&changes);
 
         return changes;
@@ -152,13 +150,13 @@ mod tests {
         let assertion = HashMap::from_iter(IntoIter::new([
             ("/a".to_owned(), Operation{
                 op: OpType::Update,
-                to: Option::Some(serde_json::Value::String("a".to_owned())),
-                from: Option::Some(serde_json::Value::String("a-what?".to_owned())),
+                from: Option::Some(serde_json::Value::String("a".to_owned())),
+                to: Option::Some(serde_json::Value::String("a-what?".to_owned())),
             }),
             ("/arr/0/arr3/arrObj1".to_owned(), Operation{
                 op: OpType::Update,
-                to: Option::Some(serde_json::Value::String("arrObj1".to_owned())),
-                from: Option::Some(serde_json::Value::String("arrObj2".to_owned())),
+                from: Option::Some(serde_json::Value::String("arrObj1".to_owned())),
+                to: Option::Some(serde_json::Value::String("arrObj2".to_owned())),
             }),
         ]));
 
@@ -179,7 +177,34 @@ mod tests {
         // let worker = Box::from(WorkerMock{});
 
         let tree = reconciler.reconcile();
-        println!("tree is: {:?}", tree);
+        let assertion = HashMap::<_, _>::from_iter(IntoIter::new([
+            ("/arr/0/arr1".to_owned(), Operation { op: OpType::Delete, from: Some(json!("arr1")), to: None }),
+            ("/f".to_owned(), Operation { op: OpType::Delete, from: Some(json!(null)), to: None }),
+            ("/arr/2".to_owned(), Operation { op: OpType::Delete, from: Some(json!("arr4")), to: None }),
+            ("/arr/4".to_owned(), Operation { op: OpType::Delete, from: Some(json!(0.2)), to: None }),
+            ("/e".to_owned(), Operation { op: OpType::Delete, from: Some(json!("e")), to: None }),
+            ("/g".to_owned(), Operation { op: OpType::Delete, from: Some(json!(null)), to: None }),
+            ("/arr/3".to_owned(), Operation { op: OpType::Delete, from: Some(json!(0.1)), to: None }),
+            ("/obj/a3/3".to_owned(), Operation { op: OpType::Delete, from: Some(json!(4)), to: None }),
+            ("/obj/a3/2".to_owned(), Operation { op: OpType::Delete, from: Some(json!(3)), to: None }),
+            ("/obj/a3/4".to_owned(), Operation { op: OpType::Delete, from: Some(json!(0.5)), to: None }),
+            ("/obj/a3/0".to_owned(), Operation { op: OpType::Delete, from: Some(json!(1)), to: None }),
+            ("/c/2".to_owned(), Operation { op: OpType::Delete, from: Some(json!(3)), to: None }),
+            ("/b".to_owned(), Operation { op: OpType::Delete, from: Some(json!("b")), to: None }),
+            ("/d".to_owned(), Operation { op: OpType::Delete, from: Some(json!(132)), to: None }),
+            ("/obj/a2".to_owned(), Operation { op: OpType::Delete, from: Some(json!("a2")), to: None }),
+            ("/arr/0/arr3/arrObj1".to_owned(), Operation { op: OpType::Delete, from: Some(json!("arrObj1")), to: None }),
+            ("/arr/5".to_owned(), Operation { op: OpType::Delete, from: Some(json!(0.3)), to: None }),
+            ("/c/1".to_owned(), Operation { op: OpType::Delete, from: Some(json!("2")), to: None }),
+            ("/obj/a3/1".to_owned(), Operation { op: OpType::Delete, from: Some(json!(2)), to: None }),
+            ("/obj/a1".to_owned(), Operation { op: OpType::Delete, from: Some(json!("a1")), to: None }),
+            ("/c/0".to_owned(), Operation { op: OpType::Delete, from: Some(json!("1")), to: None }),
+            ("/arr/0/arr2".to_owned(), Operation { op: OpType::Delete, from: Some(json!("arr2")), to: None }),
+            ("/arr/1/abc123".to_owned(), Operation { op: OpType::Delete, from: Some(json!("abc123")), to: None }),
+            ("/a".to_owned(), Operation { op: OpType::Update, from: Some(serde_json::json!("a")), to: Some(json!("a-what?")) }),
+        ]));
+
+        assert_eq!(tree, assertion);
     }
 
     #[test]
@@ -196,6 +221,18 @@ mod tests {
         // let worker = Box::from(WorkerMock{});
 
         let tree = reconciler.reconcile();
-        println!("tree is: {:?}", tree);
+        let assertion = HashMap::<_, _>::from_iter(IntoIter::new([
+            ("/abc".to_owned(), Operation { op: OpType::Create, from: None, to: Some(json!({
+                "abc": {
+                    "abc": "123",
+                    "123": 123
+                }
+            }))}),
+            ("/b".to_owned(), Operation { op: OpType::Create, from: None, to: Some(json!("b")) }),
+            ("/abc123".to_owned(), Operation { op: OpType::Create, from: None, to: Some(json!("abc123")) }),
+            ("/a".to_owned(), Operation { op: OpType::Update, from: Some(json!("a")), to: Some(json!("a-what?")) }),
+        ]));
+
+        assert_eq!(tree, assertion);
     }
 }

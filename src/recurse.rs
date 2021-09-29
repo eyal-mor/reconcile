@@ -122,16 +122,42 @@ pub fn recurse<'a>(elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str, changes:
         },
         SerdeValue::Object(from_data) => {
             for k in from_data.keys() {
+                let new_p = format!("{}/{}", p, k);
                 match from_data.get(k) {
                     Some(v) => {
-                        let new_p = format!("{}/{}", p, k);
                         recurse(v, comp, &new_p, changes);
                     },
-                    None => {
-                        println!("Skipped! {:?}", k);
-                    }
+                    None => { /* Skipped */ }
                 };
+
+                let to_data = comp.pointer(&new_p).unwrap_or(&SerdeValue::Null);
+                match to_data {
+                    SerdeValue::Object(v) => {
+                        let new_keys: Vec<_> = v.keys().filter(|k| !from_data.contains_key(k.clone())).collect();
+                        println!("New Keys: {:?}", new_keys);
+                    },
+                    _ => { /* Skipped */ }
+                }
             }
         },
+    }
+
+    let comp_val = comp.pointer(p).unwrap_or_else(|| &SerdeValue::Null);
+    match (elem, comp_val) {
+        (SerdeValue::Object(from_data), SerdeValue::Object(to_data)) => {
+            let new_keys: Vec<_> = to_data.keys().filter(|k| !from_data.contains_key(k.clone())).collect();
+            println!("new keys {:?}", new_keys);
+            new_keys.into_iter().for_each(|k| {
+                let path = format!("/{}", k);
+                let operation = Operation {
+                    op: OpType::Create,
+                    to: Option::from(comp.pointer(&path).unwrap().clone()),
+                    from: Option::None,
+                };
+
+                changes.insert(String::from(path), operation);
+            });
+        },
+        _ => { /* Skipped */ }
     }
 }
