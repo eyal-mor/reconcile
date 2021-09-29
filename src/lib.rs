@@ -225,6 +225,8 @@ mod tests {
             ("/abc123".to_owned(), Operation { op: OpType::Create, from: None, to: Some(json!("abc123")) }),
             ("/a".to_owned(), Operation { op: OpType::Update, from: Some(json!("a")), to: Some(json!("a-what?")) }),
             ("/array".to_owned(), Operation {op: OpType::Create, from: None, to: Some(json!([1, 2, 3]))}),
+            ("/~1abc~1abc~1123~0~0~01".to_owned(), Operation {op: OpType::Create, from: None, to: Some(json!("/abc/abc/123~~~1")) }),
+            ("/~0abc~0".to_owned(), Operation {op: OpType::Create, from: None, to: Some(json!("~abc~")) })
         ]));
 
         assert_eq!(tree, assertion);

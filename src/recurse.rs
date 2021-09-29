@@ -141,7 +141,7 @@ pub fn recurse<'a>(elem: &'a SerdeValue, comp: &'a SerdeValue, p: &str, changes:
 
             new_keys.into_iter().for_each(|k| {
                 let key_pointer = k.replace("~", "~0").replace("/", "~1");
-                let new_p = format!("{}/{}", p, k);
+                let new_p = format!("{}/{}", p, key_pointer);
 
                 let operation = Operation {
                     op: OpType::Create,
