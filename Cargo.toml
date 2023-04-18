@@ -1,7 +1,7 @@
 [package]
 name = "reconcile"
 version = "0.1.0"
-authors = ["Eyal Mor <eyalmor94@gmail.com>"]
+authors = ["Eyal Mor <eyalmor-ent@gmail.com>"]
 edition = "2018"
 
 [lib]
